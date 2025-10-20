@@ -3,6 +3,8 @@ Module for fetching innovative drug concept stocks data from A-share and HK mark
 """
 
 import datetime
+import time
+import random
 import pandas as pd
 import akshare as ak
 from typing import Optional
@@ -17,7 +19,7 @@ def _setup_pandas_options():
 
 def _get_a_stock_data(symbol: str, name: str) -> Optional[pd.DataFrame]:
     """
-    Fetch A-share stock historical data.
+    Fetch A-share stock historical data with retry mechanism.
     
     Args:
         symbol: Stock code
@@ -26,52 +28,61 @@ def _get_a_stock_data(symbol: str, name: str) -> Optional[pd.DataFrame]:
     Returns:
         DataFrame with stock history or None if failed
     """
-    try:
-        print(f"Fetching A-share data: {symbol} - {name}")
-        today = datetime.date.today().strftime('%Y%m%d')
-        one_year_ago = (datetime.date.today() - 
-                       datetime.timedelta(days=365)).strftime('%Y%m%d')
-        
-        stock_data = ak.stock_zh_a_hist(
-            symbol=symbol,
-            period="daily",
-            start_date=one_year_ago,
-            end_date=today,
-            adjust="qfq"
-        )
-        
-        if stock_data.empty:
-            print(f"Warning: {symbol} returned empty data")
-            return None
+    max_retries = 2
+    retry_delay = 1  # seconds
+    
+    for attempt in range(max_retries):
+        try:
+            print(f"Fetching A-share data: {symbol} - {name} (attempt {attempt + 1})")
+            today = datetime.date.today().strftime('%Y%m%d')
+            one_year_ago = (datetime.date.today() - 
+                           datetime.timedelta(days=365)).strftime('%Y%m%d')
             
-        stock_data = stock_data[['日期', '股票代码', '开盘', '收盘', 
-                               '最高', '最低', '成交量', '成交额']]
-        stock_data.rename(
-            columns={
-                '日期': 'Date',
-                '股票代码': 'Code',
-                '开盘': 'Open',
-                '收盘': 'Close',
-                '最高': 'High',
-                '最低': 'Low',
-                '成交量': 'Volume',
-                '成交额': 'Trading_Volume'
-            },
-            inplace=True
-        )
-        stock_data['Name'] = name
-        stock_data['Type'] = 'A'
-        
-        return stock_data
-        
-    except Exception as e:
-        print(f"Error fetching A-share data {symbol}: {e}")
-        return None
+            stock_data = ak.stock_zh_a_hist(
+                symbol=symbol,
+                period="daily",
+                start_date=one_year_ago,
+                end_date=today,
+                adjust="qfq"
+            )
+            
+            if stock_data.empty:
+                print(f"Warning: {symbol} returned empty data")
+                return None
+                
+            stock_data = stock_data[['日期', '股票代码', '开盘', '收盘', 
+                                   '最高', '最低', '成交量', '成交额']]
+            stock_data.rename(
+                columns={
+                    '日期': 'Date',
+                    '股票代码': 'Code',
+                    '开盘': 'Open',
+                    '收盘': 'Close',
+                    '最高': 'High',
+                    '最低': 'Low',
+                    '成交量': 'Volume',
+                    '成交额': 'Trading_Volume'
+                },
+                inplace=True
+            )
+            stock_data['Name'] = name
+            stock_data['Type'] = 'A'
+            
+            return stock_data
+            
+        except Exception as e:
+            print(f"Error fetching A-share data {symbol} (attempt {attempt + 1}): {e}")
+            if attempt < max_retries - 1:
+                print(f"Retrying in {retry_delay} seconds...")
+                time.sleep(retry_delay)
+            else:
+                print(f"Failed to fetch {symbol} after {max_retries} attempts")
+                return None
 
 
 def _get_hk_stock_data(symbol: str, name: str) -> Optional[pd.DataFrame]:
     """
-    Fetch HK stock historical data.
+    Fetch HK stock historical data with retry mechanism.
     
     Args:
         symbol: Stock code
@@ -80,47 +91,57 @@ def _get_hk_stock_data(symbol: str, name: str) -> Optional[pd.DataFrame]:
     Returns:
         DataFrame with stock history or None if failed
     """
-    try:
-        print(f"Fetching HK data: {symbol} - {name}")
-        today = datetime.date.today().strftime('%Y%m%d')
-        one_year_ago = (datetime.date.today() - 
-                       datetime.timedelta(days=365)).strftime('%Y%m%d')
-        
-        stock_data = ak.stock_hk_hist(
-            symbol=symbol,
-            period="daily",
-            start_date=one_year_ago,
-            end_date=today,
-            adjust="qfq"
-        )
-        
-        if stock_data.empty:
-            print(f"Warning: {symbol} returned empty data")
-            return None
+    max_retries = 3
+    retry_delay = 2  # seconds
+    
+    for attempt in range(max_retries):
+        try:
+            print(f"Fetching HK data: {symbol} - {name} (attempt {attempt + 1})")
+            today = datetime.date.today().strftime('%Y%m%d')
+            one_year_ago = (datetime.date.today() - 
+                           datetime.timedelta(days=365)).strftime('%Y%m%d')
             
-        stock_data = stock_data[['日期', '开盘', '收盘', '最高', 
-                               '最低', '成交量', '成交额']]
-        stock_data.rename(
-            columns={
-                '日期': 'Date',
-                '开盘': 'Open',
-                '收盘': 'Close',
-                '最高': 'High',
-                '最低': 'Low',
-                '成交量': 'Volume',
-                '成交额': 'Trading_Volume'
-            },
-            inplace=True
-        )
-        stock_data['Name'] = name
-        stock_data['Code'] = symbol
-        stock_data['Type'] = 'HK'
-        
-        return stock_data
-        
-    except Exception as e:
-        print(f"Error fetching HK data {symbol}: {e}")
-        return None
+            stock_data = ak.stock_hk_hist(
+                symbol=symbol,
+                period="daily",
+                start_date=one_year_ago,
+                end_date=today,
+                adjust="qfq"
+            )
+            
+            if stock_data.empty:
+                print(f"Warning: {symbol} returned empty data")
+                return None
+                
+            stock_data = stock_data[['日期', '开盘', '收盘', '最高', 
+                                   '最低', '成交量', '成交额']]
+            stock_data.rename(
+                columns={
+                    '日期': 'Date',
+                    '开盘': 'Open',
+                    '收盘': 'Close',
+                    '最高': 'High',
+                    '最低': 'Low',
+                    '成交量': 'Volume',
+                    '成交额': 'Trading_Volume'
+                },
+                inplace=True
+            )
+            stock_data['Name'] = name
+            stock_data['Code'] = symbol
+            stock_data['Type'] = 'HK'
+            
+            return stock_data
+            
+        except Exception as e:
+            print(f"Error fetching HK data {symbol} (attempt {attempt + 1}): {e}")
+            if attempt < max_retries - 1:
+                sleep_time = retry_delay * (attempt + 1)
+                print(f"Retrying in {sleep_time} seconds...")
+                time.sleep(sleep_time)
+            else:
+                print(f"Failed to fetch {symbol} after {max_retries} attempts")
+                return None
 
 
 def get_innovative_drug_stocks_data(a_stock_csv_path: str, 
@@ -149,12 +170,19 @@ def get_innovative_drug_stocks_data(a_stock_csv_path: str,
         a_stock_list = pd.read_csv(a_stock_csv_path, encoding='utf-16', sep='\t')
         print(f"A-share list contains {len(a_stock_list)} stocks")
         
-        for _, row in a_stock_list.iterrows():
+        for i, (_, row) in enumerate(a_stock_list.iterrows()):
             stock_code = str(row['代码']).zfill(6)
             stock_data = _get_a_stock_data(stock_code, row['名称'])
             if stock_data is not None:
                 all_stock_data = pd.concat([all_stock_data, stock_data], 
                                          ignore_index=True)
+            
+            # Add delay between A-share requests
+            time.sleep(0.5)
+            
+            # Progress update every 10 stocks
+            if (i + 1) % 10 == 0:
+                print(f"Processed {i + 1}/{len(a_stock_list)} A-share stocks")
                 
     except FileNotFoundError:
         print(f"Error: A-share CSV file not found {a_stock_csv_path}")
@@ -163,27 +191,36 @@ def get_innovative_drug_stocks_data(a_stock_csv_path: str,
         print(f"Error processing A-share data: {e}")
         raise ValueError(f"A-share data processing failed: {e}")
     
-    # Process HK data
+    # Process HK data with longer delays
     try:
         print("Processing HK data...")
         hk_stock_list = pd.read_csv(hk_stock_csv_path, encoding='utf-16', sep='\t')
         print(f"HK list contains {len(hk_stock_list)} stocks")
         
-        for _, row in hk_stock_list.iterrows():
+        for i, (_, row) in enumerate(hk_stock_list.iterrows()):
             stock_code = str(row['代码']).zfill(5)
             stock_data = _get_hk_stock_data(stock_code, row['名称'])
             if stock_data is not None:
                 all_stock_data = pd.concat([all_stock_data, stock_data], 
                                          ignore_index=True)
+            
+            # Longer delay for HK requests (more sensitive)
+            time.sleep(1.5)
+            
+            # Progress update every 5 stocks
+            if (i + 1) % 5 == 0:
+                print(f"Processed {i + 1}/{len(hk_stock_list)} HK stocks")
                 
     except FileNotFoundError:
         print(f"Error: HK CSV file not found {hk_stock_csv_path}")
         raise
     except Exception as e:
         print(f"Error processing HK data: {e}")
-        raise ValueError(f"HK data processing failed: {e}")
+        # Don't raise for HK data, continue with available data
+        print("Continuing with available data...")
     
     print(f"Data fetch complete. Total records: {len(all_stock_data)}")
+    print(f"Successfully fetched {all_stock_data['Code'].nunique()} unique stocks")
     return all_stock_data
 
 
