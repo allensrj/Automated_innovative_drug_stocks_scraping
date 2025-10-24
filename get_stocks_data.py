@@ -28,8 +28,8 @@ def _get_a_stock_data(symbol: str, name: str) -> Optional[pd.DataFrame]:
     Returns:
         DataFrame with stock history or None if failed
     """
-    max_retries = 2
-    retry_delay = 1  # seconds
+    max_retries = 3
+    retry_delay = 5  # seconds
     
     for attempt in range(max_retries):
         try:
@@ -92,7 +92,7 @@ def _get_hk_stock_data(symbol: str, name: str) -> Optional[pd.DataFrame]:
         DataFrame with stock history or None if failed
     """
     max_retries = 3
-    retry_delay = 2  # seconds
+    retry_delay = 5  # seconds
     
     for attempt in range(max_retries):
         try:
@@ -205,7 +205,7 @@ def get_innovative_drug_stocks_data(a_stock_csv_path: str,
                                          ignore_index=True)
             
             # Longer delay for HK requests (more sensitive)
-            time.sleep(1.5)
+            time.sleep(5.4)
             
             # Progress update every 5 stocks
             if (i + 1) % 5 == 0:
