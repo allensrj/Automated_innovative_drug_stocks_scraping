@@ -219,7 +219,7 @@ def _process_hk_stock_list(hk_stock_list: pd.DataFrame,
 def get_innovative_drug_stocks_data(a_stock_csv_path: str, 
                                   hk_stock_csv_path: str,
                                   max_retry_rounds: int = 5,
-                                  retry_delay_minutes: int = 5) -> pd.DataFrame:
+                                  retry_delay_minutes: int = 20) -> pd.DataFrame:
     """
     Fetch innovative drug concept stocks data from A-share and HK markets.
     Automatically retries failed stocks after waiting period.
