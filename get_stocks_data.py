@@ -216,6 +216,60 @@ def _process_hk_stock_list(hk_stock_list: pd.DataFrame,
     return all_stock_data, failed_stocks
 
 
+def _write_log_file(completion_time: datetime.datetime, 
+                   failed_a_stocks: list, 
+                   failed_hk_stocks: list,
+                   total_stocks: int,
+                   successful_stocks: int) -> None:
+    """
+    Write log file with program completion time and failed stocks information.
+    
+    Args:
+        completion_time: When the program completed
+        failed_a_stocks: List of failed A-share stocks
+        failed_hk_stocks: List of failed HK stocks
+        total_stocks: Total number of stocks to fetch
+        successful_stocks: Number of successfully fetched stocks
+    """
+    log_filename = "stock_data_fetch_log.txt"
+    
+    with open(log_filename, 'a', encoding='utf-8') as log_file:
+        log_file.write("\n" + "=" * 60 + "\n")
+        log_file.write("股票数据获取程序执行日志\n")
+        log_file.write("=" * 60 + "\n")
+        
+        # 1. 程序完成时间
+        log_file.write(f"程序执行完成时间: {completion_time.strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+        
+        # 2. 股票数据获取结果
+        log_file.write("股票数据获取结果:\n")
+        log_file.write(f"  总股票数量: {total_stocks}\n")
+        log_file.write(f"  成功获取: {successful_stocks}\n")
+        log_file.write(f"  失败数量: {len(failed_a_stocks) + len(failed_hk_stocks)}\n")
+        log_file.write(f"  成功率: {successful_stocks/total_stocks*100:.2f}%\n\n")
+        
+        # 失败的股票详情
+        if failed_a_stocks or failed_hk_stocks:
+            log_file.write("失败的股票列表:\n")
+            
+            if failed_a_stocks:
+                log_file.write("  A股失败股票:\n")
+                for i, stock in enumerate(failed_a_stocks, 1):
+                    log_file.write(f"    {i}. {stock['代码']} - {stock['名称']}\n")
+                log_file.write("\n")
+            
+            if failed_hk_stocks:
+                log_file.write("  港股失败股票:\n")
+                for i, stock in enumerate(failed_hk_stocks, 1):
+                    log_file.write(f"    {i}. {stock['代码']} - {stock['名称']}\n")
+        else:
+            log_file.write("所有股票数据均已成功获取！\n")
+        
+        log_file.write("=" * 60 + "\n")
+    
+    print(f"\n日志已追加到文件: {log_filename}")
+
+
 def get_innovative_drug_stocks_data(a_stock_csv_path: str, 
                                   hk_stock_csv_path: str,
                                   max_retry_rounds: int = 5,
@@ -358,9 +412,19 @@ def get_innovative_drug_stocks_data(a_stock_csv_path: str,
     print("数据获取完成")
     print(f"{'='*60}")
     print(f"总记录数: {len(all_stock_data)}")
+    successful_stocks = 0
     if len(all_stock_data) > 0:
-        print(f"成功获取股票数: {all_stock_data['Code'].nunique()}")
+        successful_stocks = all_stock_data['Code'].nunique()
+        print(f"成功获取股票数: {successful_stocks}")
     print(f"总轮数: {round_num}")
+    
+    # Calculate total stocks count
+    total_stocks = len(a_stock_list) + len(hk_stock_list)
+    
+    # Write log file
+    completion_time = datetime.datetime.now()
+    _write_log_file(completion_time, failed_a_stocks, failed_hk_stocks, 
+                   total_stocks, successful_stocks)
     
     if len(failed_a_stocks) > 0 or len(failed_hk_stocks) > 0:
         print(f"\n警告: 仍有部分股票未能成功获取:")
