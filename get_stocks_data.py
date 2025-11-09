@@ -92,7 +92,7 @@ def _get_hk_stock_data(symbol: str, name: str) -> Optional[pd.DataFrame]:
         DataFrame with stock history or None if failed
     """
     max_retries = 3
-    retry_delay = 0.1  # seconds
+    retry_delay = 1  # seconds
     
     for attempt in range(max_retries):
         try:
@@ -273,7 +273,7 @@ def _write_log_file(completion_time: datetime.datetime,
 def get_innovative_drug_stocks_data(a_stock_csv_path: str, 
                                   hk_stock_csv_path: str,
                                   max_retry_rounds: int = 5,
-                                  retry_delay_minutes: int = 30) -> pd.DataFrame:
+                                  retry_delay_minutes: int = 45) -> pd.DataFrame:
     """
     Fetch innovative drug concept stocks data from A-share and HK markets.
     Automatically retries failed stocks after waiting period.
