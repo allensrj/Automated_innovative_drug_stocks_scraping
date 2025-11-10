@@ -8,7 +8,6 @@ import random
 import pandas as pd
 import akshare as ak
 from typing import Optional
-import os
 
 
 def _setup_pandas_options():
@@ -18,15 +17,13 @@ def _setup_pandas_options():
     pd.set_option('display.max_rows', 1000)
 
 
-def _get_a_stock_data(symbol: str, name: str, start_date: str, end_date: str) -> Optional[pd.DataFrame]:
+def _get_a_stock_data(symbol: str, name: str) -> Optional[pd.DataFrame]:
     """
     Fetch A-share stock historical data with retry mechanism.
     
     Args:
         symbol: Stock code
         name: Stock name
-        start_date: Start date in YYYYMMDD format
-        end_date: End date in YYYYMMDD format
         
     Returns:
         DataFrame with stock history or None if failed
@@ -37,12 +34,15 @@ def _get_a_stock_data(symbol: str, name: str, start_date: str, end_date: str) ->
     for attempt in range(max_retries):
         try:
             print(f"Fetching A-share data: {symbol} - {name} (attempt {attempt + 1})")
+            today = datetime.date.today().strftime('%Y%m%d')
+            one_year_ago = (datetime.date.today() - 
+                           datetime.timedelta(days=365)).strftime('%Y%m%d')
             
             stock_data = ak.stock_zh_a_hist(
                 symbol=symbol,
                 period="daily",
-                start_date=start_date,
-                end_date=end_date,
+                start_date=one_year_ago,
+                end_date=today,
                 adjust="qfq"
             )
             
@@ -80,15 +80,13 @@ def _get_a_stock_data(symbol: str, name: str, start_date: str, end_date: str) ->
                 return None
 
 
-def _get_hk_stock_data(symbol: str, name: str, start_date: str, end_date: str) -> Optional[pd.DataFrame]:
+def _get_hk_stock_data(symbol: str, name: str) -> Optional[pd.DataFrame]:
     """
     Fetch HK stock historical data with retry mechanism.
     
     Args:
         symbol: Stock code
         name: Stock name
-        start_date: Start date in YYYYMMDD format
-        end_date: End date in YYYYMMDD format
         
     Returns:
         DataFrame with stock history or None if failed
@@ -99,12 +97,15 @@ def _get_hk_stock_data(symbol: str, name: str, start_date: str, end_date: str) -
     for attempt in range(max_retries):
         try:
             print(f"Fetching HK data: {symbol} - {name} (attempt {attempt + 1})")
+            today = datetime.date.today().strftime('%Y%m%d')
+            one_year_ago = (datetime.date.today() - 
+                           datetime.timedelta(days=365)).strftime('%Y%m%d')
             
             stock_data = ak.stock_hk_hist(
                 symbol=symbol,
                 period="daily",
-                start_date=start_date,
-                end_date=end_date,
+                start_date=one_year_ago,
+                end_date=today,
                 adjust="qfq"
             )
             
@@ -144,17 +145,13 @@ def _get_hk_stock_data(symbol: str, name: str, start_date: str, end_date: str) -
 
 
 def _process_a_stock_list(a_stock_list: pd.DataFrame, 
-                          all_stock_data: pd.DataFrame,
-                          start_date: str,
-                          end_date: str) -> tuple[pd.DataFrame, list]:
+                          all_stock_data: pd.DataFrame) -> tuple[pd.DataFrame, list]:
     """
     Process A-share stock list and return updated data and failed stocks.
     
     Args:
         a_stock_list: DataFrame with A-share stock list
         all_stock_data: Accumulated stock data
-        start_date: Start date in YYYYMMDD format
-        end_date: End date in YYYYMMDD format
         
     Returns:
         Tuple of (updated_data, failed_stocks_list)
@@ -164,7 +161,7 @@ def _process_a_stock_list(a_stock_list: pd.DataFrame,
     for i, (_, row) in enumerate(a_stock_list.iterrows()):
         stock_code = str(row['代码']).zfill(6)
         stock_name = row['名称']
-        stock_data = _get_a_stock_data(stock_code, stock_name, start_date, end_date)
+        stock_data = _get_a_stock_data(stock_code, stock_name)
         
         if stock_data is not None:
             all_stock_data = pd.concat([all_stock_data, stock_data], 
@@ -184,17 +181,13 @@ def _process_a_stock_list(a_stock_list: pd.DataFrame,
 
 
 def _process_hk_stock_list(hk_stock_list: pd.DataFrame, 
-                           all_stock_data: pd.DataFrame,
-                           start_date: str,
-                           end_date: str) -> tuple[pd.DataFrame, list]:
+                           all_stock_data: pd.DataFrame) -> tuple[pd.DataFrame, list]:
     """
     Process HK stock list and return updated data and failed stocks.
     
     Args:
         hk_stock_list: DataFrame with HK stock list
         all_stock_data: Accumulated stock data
-        start_date: Start date in YYYYMMDD format
-        end_date: End date in YYYYMMDD format
         
     Returns:
         Tuple of (updated_data, failed_stocks_list)
@@ -204,7 +197,7 @@ def _process_hk_stock_list(hk_stock_list: pd.DataFrame,
     for i, (_, row) in enumerate(hk_stock_list.iterrows()):
         stock_code = str(row['代码']).zfill(5)
         stock_name = row['名称']
-        stock_data = _get_hk_stock_data(stock_code, stock_name, start_date, end_date)
+        stock_data = _get_hk_stock_data(stock_code, stock_name)
         
         if stock_data is not None:
             all_stock_data = pd.concat([all_stock_data, stock_data], 
@@ -227,8 +220,7 @@ def _write_log_file(completion_time: datetime.datetime,
                    failed_a_stocks: list, 
                    failed_hk_stocks: list,
                    total_stocks: int,
-                   successful_stocks: int,
-                   incremental_mode: bool = False) -> None:
+                   successful_stocks: int) -> None:
     """
     Write log file with program completion time and failed stocks information.
     
@@ -238,7 +230,6 @@ def _write_log_file(completion_time: datetime.datetime,
         failed_hk_stocks: List of failed HK stocks
         total_stocks: Total number of stocks to fetch
         successful_stocks: Number of successfully fetched stocks
-        incremental_mode: Whether running in incremental mode
     """
     log_filename = "stock_data_fetch_log.txt"
     
@@ -248,18 +239,14 @@ def _write_log_file(completion_time: datetime.datetime,
         log_file.write("=" * 60 + "\n")
         
         # 1. 程序完成时间
-        log_file.write(f"程序执行完成时间: {completion_time.strftime('%Y-%m-%d %H:%M:%S')}\n")
-        log_file.write(f"运行模式: {'增量更新' if incremental_mode else '全量更新'}\n\n")
+        log_file.write(f"程序执行完成时间: {completion_time.strftime('%Y-%m-%d %H:%M:%S')}\n\n")
         
         # 2. 股票数据获取结果
         log_file.write("股票数据获取结果:\n")
         log_file.write(f"  总股票数量: {total_stocks}\n")
         log_file.write(f"  成功获取: {successful_stocks}\n")
         log_file.write(f"  失败数量: {len(failed_a_stocks) + len(failed_hk_stocks)}\n")
-        if total_stocks > 0:
-            log_file.write(f"  成功率: {successful_stocks/total_stocks*100:.2f}%\n\n")
-        else:
-            log_file.write("  成功率: N/A\n\n")
+        log_file.write(f"  成功率: {successful_stocks/total_stocks*100:.2f}%\n\n")
         
         # 失败的股票详情
         if failed_a_stocks or failed_hk_stocks:
@@ -283,60 +270,8 @@ def _write_log_file(completion_time: datetime.datetime,
     print(f"\n日志已追加到文件: {log_filename}")
 
 
-def _get_latest_date_from_csv(csv_path: str) -> str:
-    """
-    Get the latest date from existing CSV file.
-    
-    Args:
-        csv_path: Path to the CSV file
-        
-    Returns:
-        Latest date in YYYYMMDD format, or empty string if file doesn't exist
-    """
-    if not os.path.exists(csv_path):
-        return ""
-    
-    try:
-        existing_data = pd.read_csv(csv_path, encoding='gbk')
-        if 'Date' in existing_data.columns and len(existing_data) > 0:
-            latest_date = pd.to_datetime(existing_data['Date']).max()
-            return latest_date.strftime('%Y%m%d')
-    except Exception as e:
-        print(f"Warning: Error reading existing CSV file {csv_path}: {e}")
-    
-    return ""
-
-
-def _sort_dataframe(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Sort DataFrame by ['Date', 'Type', 'Code'].
-    
-    Args:
-        df: DataFrame to sort
-        
-    Returns:
-        Sorted DataFrame
-    """
-    if len(df) == 0:
-        return df
-    
-    # Ensure Date column is in datetime format for proper sorting
-    df_sorted = df.copy()
-    df_sorted['Date'] = pd.to_datetime(df_sorted['Date'])
-    
-    # Sort by specified columns
-    df_sorted = df_sorted.sort_values(['Date', 'Type', 'Code'])
-    
-    # Convert Date back to string format for consistency
-    df_sorted['Date'] = df_sorted['Date'].dt.strftime('%Y-%m-%d')
-    
-    return df_sorted.reset_index(drop=True)
-
-
 def get_innovative_drug_stocks_data(a_stock_csv_path: str, 
                                   hk_stock_csv_path: str,
-                                  output_csv_path: str = 'innovative_drug_stocks_data.csv',
-                                  incremental: bool = True,
                                   max_retry_rounds: int = 5,
                                   retry_delay_minutes: int = 45) -> pd.DataFrame:
     """
@@ -346,8 +281,6 @@ def get_innovative_drug_stocks_data(a_stock_csv_path: str,
     Args:
         a_stock_csv_path: Path to A-share stock list CSV
         hk_stock_csv_path: Path to HK stock list CSV
-        output_csv_path: Path to output CSV file
-        incremental: Whether to run in incremental mode (default: True)
         max_retry_rounds: Maximum number of retry rounds (default: 5)
         retry_delay_minutes: Minutes to wait before retry (default: 30)
         
@@ -361,31 +294,6 @@ def get_innovative_drug_stocks_data(a_stock_csv_path: str,
     _setup_pandas_options()
     
     all_stock_data = pd.DataFrame()
-    
-    # Determine date range based on incremental mode
-    today = datetime.date.today().strftime('%Y%m%d')
-    
-    if incremental and os.path.exists(output_csv_path):
-        latest_date = _get_latest_date_from_csv(output_csv_path)
-        if latest_date:
-            # Start from the day after the latest date in CSV
-            latest_dt = datetime.datetime.strptime(latest_date, '%Y%m%d')
-            start_date = (latest_dt + datetime.timedelta(days=1)).strftime('%Y%m%d')
-            print(f"增量模式: 从 {start_date} 到 {today}")
-        else:
-            start_date = (datetime.date.today() - datetime.timedelta(days=365)).strftime('%Y%m%d')
-            print(f"增量模式失败，使用一年数据: 从 {start_date} 到 {today}")
-    else:
-        start_date = (datetime.date.today() - datetime.timedelta(days=365)).strftime('%Y%m%d')
-        print(f"全量模式: 从 {start_date} 到 {today}")
-    
-    # If start_date is after today, no new data to fetch
-    if start_date > today:
-        print("没有新数据需要获取，数据已是最新")
-        if os.path.exists(output_csv_path):
-            return pd.read_csv(output_csv_path, encoding='gbk')
-        else:
-            return pd.DataFrame()
     
     # Load initial stock lists
     try:
@@ -424,7 +332,7 @@ def get_innovative_drug_stocks_data(a_stock_csv_path: str,
     if len(a_stock_list) > 0:
         print("Processing A-share data...")
         all_stock_data, failed_a_stocks = _process_a_stock_list(
-            a_stock_list, all_stock_data, start_date, today
+            a_stock_list, all_stock_data
         )
         print(f"A股处理完成，成功: {len(a_stock_list) - len(failed_a_stocks)}, "
               f"失败: {len(failed_a_stocks)}")
@@ -433,7 +341,7 @@ def get_innovative_drug_stocks_data(a_stock_csv_path: str,
     if len(hk_stock_list) > 0:
         print("\nProcessing HK data...")
         all_stock_data, failed_hk_stocks = _process_hk_stock_list(
-            hk_stock_list, all_stock_data, start_date, today
+            hk_stock_list, all_stock_data
         )
         print(f"港股处理完成，成功: {len(hk_stock_list) - len(failed_hk_stocks)}, "
               f"失败: {len(failed_hk_stocks)}")
@@ -477,7 +385,7 @@ def get_innovative_drug_stocks_data(a_stock_csv_path: str,
             print(f"重试 A股数据 ({len(failed_a_stocks)} 只)...")
             failed_a_df = pd.DataFrame(failed_a_stocks)
             temp_data, new_failed_a_stocks = _process_a_stock_list(
-                failed_a_df, all_stock_data, start_date, today
+                failed_a_df, all_stock_data
             )
             all_stock_data = temp_data
             print(f"A股重试完成，成功: {len(failed_a_stocks) - len(new_failed_a_stocks)}, "
@@ -489,7 +397,7 @@ def get_innovative_drug_stocks_data(a_stock_csv_path: str,
             print(f"\n重试 港股数据 ({len(failed_hk_stocks)} 只)...")
             failed_hk_df = pd.DataFrame(failed_hk_stocks)
             temp_data, new_failed_hk_stocks = _process_hk_stock_list(
-                failed_hk_df, all_stock_data, start_date, today
+                failed_hk_df, all_stock_data
             )
             all_stock_data = temp_data
             print(f"港股重试完成，成功: {len(failed_hk_stocks) - len(new_failed_hk_stocks)}, "
@@ -498,37 +406,6 @@ def get_innovative_drug_stocks_data(a_stock_csv_path: str,
         # Update failed lists
         failed_a_stocks = new_failed_a_stocks
         failed_hk_stocks = new_failed_hk_stocks
-    
-    # Save data (append to existing file in incremental mode)
-    if len(all_stock_data) > 0:
-        if incremental and os.path.exists(output_csv_path):
-            # Read existing data with GBK encoding
-            existing_data = pd.read_csv(output_csv_path, encoding='gbk')
-            
-            # Append new data
-            combined_data = pd.concat([existing_data, all_stock_data], ignore_index=True)
-            
-            # Remove duplicates (in case of overlap)
-            combined_data = combined_data.drop_duplicates(subset=['Date', 'Code', 'Type'], keep='last')
-            
-            # Sort by ['Date', 'Type', 'Code']
-            combined_data = _sort_dataframe(combined_data)
-            
-            # Save combined data with GBK encoding
-            combined_data.to_csv(output_csv_path, index=False, encoding='gbk')
-            print(f"数据已增量保存到: {output_csv_path} (总记录数: {len(combined_data)})")
-            all_stock_data = combined_data
-        else:
-            # Sort data before saving
-            all_stock_data = _sort_dataframe(all_stock_data)
-            
-            # Save as new file with GBK encoding
-            all_stock_data.to_csv(output_csv_path, index=False, encoding='gbk')
-            print(f"数据已保存到: {output_csv_path} (记录数: {len(all_stock_data)})")
-    else:
-        print("没有新数据需要保存")
-        if os.path.exists(output_csv_path):
-            all_stock_data = pd.read_csv(output_csv_path, encoding='gbk')
     
     # Final summary
     print(f"\n{'='*60}")
@@ -547,7 +424,7 @@ def get_innovative_drug_stocks_data(a_stock_csv_path: str,
     # Write log file
     completion_time = datetime.datetime.now()
     _write_log_file(completion_time, failed_a_stocks, failed_hk_stocks, 
-                   total_stocks, successful_stocks, incremental)
+                   total_stocks, successful_stocks)
     
     if len(failed_a_stocks) > 0 or len(failed_hk_stocks) > 0:
         print(f"\n警告: 仍有部分股票未能成功获取:")
@@ -567,15 +444,9 @@ def main():
     """Main function."""
     a_stock_csv = ('Ashare_innovative_drug_stocks_code.csv')
     hk_stock_csv = ('Hshare_innovative_drug_stocks_code.csv')
-    output_file = 'innovative_drug_stocks_data.csv'
 
     try:
-        stock_data = get_innovative_drug_stocks_data(
-            a_stock_csv, 
-            hk_stock_csv, 
-            output_csv_path=output_file,
-            incremental=True  # 设置为增量模式
-        )
+        stock_data = get_innovative_drug_stocks_data(a_stock_csv, hk_stock_csv)
         
         print("\nData overview:")
         print(stock_data.head())
@@ -583,6 +454,8 @@ def main():
         print("Data type distribution:")
         print(stock_data['Type'].value_counts())
         
+        output_file = 'innovative_drug_stocks_data.csv'
+        stock_data.to_csv(output_file, index=False, encoding='utf-8')
         print(f"\nData saved to: {output_file}")
         
     except Exception as e:
