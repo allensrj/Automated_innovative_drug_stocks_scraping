@@ -312,7 +312,7 @@ def get_innovative_drug_stocks_data(a_stock_csv_path: str,
                                   output_csv_path: str = 'innovative_drug_stocks_data.csv',
                                   incremental: bool = True,
                                   max_retry_rounds: int = 5,
-                                  retry_delay_minutes: int = 45) -> pd.DataFrame:
+                                  retry_delay_minutes: int = 1) -> pd.DataFrame:
     """
     Fetch innovative drug concept stocks data from A-share and HK markets.
     Automatically retries failed stocks after waiting period.
