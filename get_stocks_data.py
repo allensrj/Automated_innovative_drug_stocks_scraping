@@ -297,7 +297,7 @@ def _get_latest_date_from_csv(csv_path: str) -> str:
         return ""
     
     try:
-        existing_data = pd.read_csv(csv_path)
+        existing_data = pd.read_csv(csv_path, encoding='gbk')
         if 'Date' in existing_data.columns and len(existing_data) > 0:
             latest_date = pd.to_datetime(existing_data['Date']).max()
             return latest_date.strftime('%Y%m%d')
@@ -307,12 +307,38 @@ def _get_latest_date_from_csv(csv_path: str) -> str:
     return ""
 
 
+def _sort_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Sort DataFrame by ['Date', 'Type', 'Code'].
+    
+    Args:
+        df: DataFrame to sort
+        
+    Returns:
+        Sorted DataFrame
+    """
+    if len(df) == 0:
+        return df
+    
+    # Ensure Date column is in datetime format for proper sorting
+    df_sorted = df.copy()
+    df_sorted['Date'] = pd.to_datetime(df_sorted['Date'])
+    
+    # Sort by specified columns
+    df_sorted = df_sorted.sort_values(['Date', 'Type', 'Code'])
+    
+    # Convert Date back to string format for consistency
+    df_sorted['Date'] = df_sorted['Date'].dt.strftime('%Y-%m-%d')
+    
+    return df_sorted.reset_index(drop=True)
+
+
 def get_innovative_drug_stocks_data(a_stock_csv_path: str, 
                                   hk_stock_csv_path: str,
                                   output_csv_path: str = 'innovative_drug_stocks_data.csv',
                                   incremental: bool = True,
                                   max_retry_rounds: int = 5,
-                                  retry_delay_minutes: int = 1) -> pd.DataFrame:
+                                  retry_delay_minutes: int = 45) -> pd.DataFrame:
     """
     Fetch innovative drug concept stocks data from A-share and HK markets.
     Automatically retries failed stocks after waiting period.
@@ -357,7 +383,7 @@ def get_innovative_drug_stocks_data(a_stock_csv_path: str,
     if start_date > today:
         print("没有新数据需要获取，数据已是最新")
         if os.path.exists(output_csv_path):
-            return pd.read_csv(output_csv_path)
+            return pd.read_csv(output_csv_path, encoding='gbk')
         else:
             return pd.DataFrame()
     
@@ -476,28 +502,33 @@ def get_innovative_drug_stocks_data(a_stock_csv_path: str,
     # Save data (append to existing file in incremental mode)
     if len(all_stock_data) > 0:
         if incremental and os.path.exists(output_csv_path):
-            # Read existing data and append new data
-            existing_data = pd.read_csv(output_csv_path)
+            # Read existing data with GBK encoding
+            existing_data = pd.read_csv(output_csv_path, encoding='gbk')
+            
+            # Append new data
             combined_data = pd.concat([existing_data, all_stock_data], ignore_index=True)
             
             # Remove duplicates (in case of overlap)
             combined_data = combined_data.drop_duplicates(subset=['Date', 'Code', 'Type'], keep='last')
             
-            # Sort by date and code
-            combined_data = combined_data.sort_values(['Date', 'Code']).reset_index(drop=True)
+            # Sort by ['Date', 'Type', 'Code']
+            combined_data = _sort_dataframe(combined_data)
             
-            # Save combined data
-            combined_data.to_csv(output_csv_path, index=False, encoding='utf-8')
+            # Save combined data with GBK encoding
+            combined_data.to_csv(output_csv_path, index=False, encoding='gbk')
             print(f"数据已增量保存到: {output_csv_path} (总记录数: {len(combined_data)})")
             all_stock_data = combined_data
         else:
-            # Save as new file
-            all_stock_data.to_csv(output_csv_path, index=False, encoding='utf-8')
+            # Sort data before saving
+            all_stock_data = _sort_dataframe(all_stock_data)
+            
+            # Save as new file with GBK encoding
+            all_stock_data.to_csv(output_csv_path, index=False, encoding='gbk')
             print(f"数据已保存到: {output_csv_path} (记录数: {len(all_stock_data)})")
     else:
         print("没有新数据需要保存")
         if os.path.exists(output_csv_path):
-            all_stock_data = pd.read_csv(output_csv_path)
+            all_stock_data = pd.read_csv(output_csv_path, encoding='gbk')
     
     # Final summary
     print(f"\n{'='*60}")
