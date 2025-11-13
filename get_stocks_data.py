@@ -4,7 +4,7 @@ Module for fetching innovative drug concept stocks data from A-share and HK mark
 
 import datetime
 import time
-import random
+import os
 import pandas as pd
 import akshare as ak
 from typing import Optional
@@ -92,7 +92,7 @@ def _get_hk_stock_data(symbol: str, name: str) -> Optional[pd.DataFrame]:
         DataFrame with stock history or None if failed
     """
     max_retries = 3
-    retry_delay = 1  # seconds
+    retry_delay = 0.1  # seconds
     
     for attempt in range(max_retries):
         try:
@@ -145,18 +145,22 @@ def _get_hk_stock_data(symbol: str, name: str) -> Optional[pd.DataFrame]:
 
 
 def _process_a_stock_list(a_stock_list: pd.DataFrame, 
-                          all_stock_data: pd.DataFrame) -> tuple[pd.DataFrame, list]:
+                          output_folder: str) -> tuple[int, list]:
     """
-    Process A-share stock list and return updated data and failed stocks.
+    Process A-share stock list and save each stock data to file.
     
     Args:
         a_stock_list: DataFrame with A-share stock list
-        all_stock_data: Accumulated stock data
+        output_folder: Folder path to save stock data files
         
     Returns:
-        Tuple of (updated_data, failed_stocks_list)
+        Tuple of (success_count, failed_stocks_list)
     """
     failed_stocks = []
+    success_count = 0
+    
+    # Ensure output folder exists
+    os.makedirs(output_folder, exist_ok=True)
     
     for i, (_, row) in enumerate(a_stock_list.iterrows()):
         stock_code = str(row['代码']).zfill(6)
@@ -164,8 +168,11 @@ def _process_a_stock_list(a_stock_list: pd.DataFrame,
         stock_data = _get_a_stock_data(stock_code, stock_name)
         
         if stock_data is not None:
-            all_stock_data = pd.concat([all_stock_data, stock_data], 
-                                     ignore_index=True)
+            # Save to file: {stock_code}.csv
+            output_file = os.path.join(output_folder, f"{stock_code}.csv")
+            stock_data.to_csv(output_file, index=False, encoding='utf-8')
+            print(f"已保存: {stock_code} - {stock_name} -> {output_file}")
+            success_count += 1
         else:
             failed_stocks.append({'代码': stock_code, '名称': stock_name})
             print(f"记录失败股票: {stock_code} - {stock_name}")
@@ -177,22 +184,26 @@ def _process_a_stock_list(a_stock_list: pd.DataFrame,
         if (i + 1) % 10 == 0:
             print(f"Processed {i + 1}/{len(a_stock_list)} A-share stocks")
     
-    return all_stock_data, failed_stocks
+    return success_count, failed_stocks
 
 
 def _process_hk_stock_list(hk_stock_list: pd.DataFrame, 
-                           all_stock_data: pd.DataFrame) -> tuple[pd.DataFrame, list]:
+                           output_folder: str) -> tuple[int, list]:
     """
-    Process HK stock list and return updated data and failed stocks.
+    Process HK stock list and save each stock data to file.
     
     Args:
         hk_stock_list: DataFrame with HK stock list
-        all_stock_data: Accumulated stock data
+        output_folder: Folder path to save stock data files
         
     Returns:
-        Tuple of (updated_data, failed_stocks_list)
+        Tuple of (success_count, failed_stocks_list)
     """
     failed_stocks = []
+    success_count = 0
+    
+    # Ensure output folder exists
+    os.makedirs(output_folder, exist_ok=True)
     
     for i, (_, row) in enumerate(hk_stock_list.iterrows()):
         stock_code = str(row['代码']).zfill(5)
@@ -200,8 +211,11 @@ def _process_hk_stock_list(hk_stock_list: pd.DataFrame,
         stock_data = _get_hk_stock_data(stock_code, stock_name)
         
         if stock_data is not None:
-            all_stock_data = pd.concat([all_stock_data, stock_data], 
-                                     ignore_index=True)
+            # Save to file: {stock_code}.csv
+            output_file = os.path.join(output_folder, f"{stock_code}.csv")
+            stock_data.to_csv(output_file, index=False, encoding='utf-8')
+            print(f"已保存: {stock_code} - {stock_name} -> {output_file}")
+            success_count += 1
         else:
             failed_stocks.append({'代码': stock_code, '名称': stock_name})
             print(f"记录失败股票: {stock_code} - {stock_name}")
@@ -213,79 +227,36 @@ def _process_hk_stock_list(hk_stock_list: pd.DataFrame,
         if (i + 1) % 5 == 0:
             print(f"Processed {i + 1}/{len(hk_stock_list)} HK stocks")
     
-    return all_stock_data, failed_stocks
-
-
-def _write_log_file(completion_time: datetime.datetime, 
-                   failed_a_stocks: list, 
-                   failed_hk_stocks: list,
-                   total_stocks: int,
-                   successful_stocks: int) -> None:
-    """
-    Write log file with program completion time and failed stocks information.
-    
-    Args:
-        completion_time: When the program completed
-        failed_a_stocks: List of failed A-share stocks
-        failed_hk_stocks: List of failed HK stocks
-        total_stocks: Total number of stocks to fetch
-        successful_stocks: Number of successfully fetched stocks
-    """
-    log_filename = "stock_data_fetch_log.txt"
-    
-    with open(log_filename, 'a', encoding='utf-8') as log_file:
-        log_file.write("\n" + "=" * 60 + "\n")
-        log_file.write("股票数据获取程序执行日志\n")
-        log_file.write("=" * 60 + "\n")
-        
-        # 1. 程序完成时间
-        log_file.write(f"程序执行完成时间: {completion_time.strftime('%Y-%m-%d %H:%M:%S')}\n\n")
-        
-        # 2. 股票数据获取结果
-        log_file.write("股票数据获取结果:\n")
-        log_file.write(f"  总股票数量: {total_stocks}\n")
-        log_file.write(f"  成功获取: {successful_stocks}\n")
-        log_file.write(f"  失败数量: {len(failed_a_stocks) + len(failed_hk_stocks)}\n")
-        log_file.write(f"  成功率: {successful_stocks/total_stocks*100:.2f}%\n\n")
-        
-        # 失败的股票详情
-        if failed_a_stocks or failed_hk_stocks:
-            log_file.write("失败的股票列表:\n")
-            
-            if failed_a_stocks:
-                log_file.write("  A股失败股票:\n")
-                for i, stock in enumerate(failed_a_stocks, 1):
-                    log_file.write(f"    {i}. {stock['代码']} - {stock['名称']}\n")
-                log_file.write("\n")
-            
-            if failed_hk_stocks:
-                log_file.write("  港股失败股票:\n")
-                for i, stock in enumerate(failed_hk_stocks, 1):
-                    log_file.write(f"    {i}. {stock['代码']} - {stock['名称']}\n")
-        else:
-            log_file.write("所有股票数据均已成功获取！\n")
-        
-        log_file.write("=" * 60 + "\n")
-    
-    print(f"\n日志已追加到文件: {log_filename}")
+    return success_count, failed_stocks
 
 
 def get_innovative_drug_stocks_data(a_stock_csv_path: str, 
                                   hk_stock_csv_path: str,
+                                  output_folder: str = 'stock_data',
                                   max_retry_rounds: int = 5,
-                                  retry_delay_minutes: int = 45) -> pd.DataFrame:
+                                  retry_delay_minutes: int = 5) -> dict:
     """
     Fetch innovative drug concept stocks data from A-share and HK markets.
     Automatically retries failed stocks after waiting period.
+    Each stock data is saved to a separate CSV file in the output folder.
     
     Args:
         a_stock_csv_path: Path to A-share stock list CSV
         hk_stock_csv_path: Path to HK stock list CSV
+        output_folder: Folder path to save stock data files (default: 'stock_data')
         max_retry_rounds: Maximum number of retry rounds (default: 5)
-        retry_delay_minutes: Minutes to wait before retry (default: 30)
+        retry_delay_minutes: Minutes to wait before retry (default: 5)
         
     Returns:
-        Combined DataFrame with A-share and HK data
+        Dictionary with statistics: {
+            'total_success': int,
+            'total_failed': int,
+            'a_success': int,
+            'a_failed': int,
+            'hk_success': int,
+            'hk_failed': int,
+            'output_folder': str
+        }
         
     Raises:
         FileNotFoundError: When CSV files not found
@@ -293,7 +264,8 @@ def get_innovative_drug_stocks_data(a_stock_csv_path: str,
     """
     _setup_pandas_options()
     
-    all_stock_data = pd.DataFrame()
+    # Ensure output folder exists
+    os.makedirs(output_folder, exist_ok=True)
     
     # Load initial stock lists
     try:
@@ -321,29 +293,34 @@ def get_innovative_drug_stocks_data(a_stock_csv_path: str,
     # Track failed stocks for retry
     failed_a_stocks = []
     failed_hk_stocks = []
+    total_a_success = 0
+    total_hk_success = 0
     
     # Initial processing round
     round_num = 1
     print(f"\n{'='*60}")
     print(f"开始第 {round_num} 轮数据获取")
+    print(f"输出文件夹: {output_folder}")
     print(f"{'='*60}\n")
     
     # Process A-share data
     if len(a_stock_list) > 0:
         print("Processing A-share data...")
-        all_stock_data, failed_a_stocks = _process_a_stock_list(
-            a_stock_list, all_stock_data
+        success_count, failed_a_stocks = _process_a_stock_list(
+            a_stock_list, output_folder
         )
-        print(f"A股处理完成，成功: {len(a_stock_list) - len(failed_a_stocks)}, "
+        total_a_success += success_count
+        print(f"A股处理完成，成功: {success_count}, "
               f"失败: {len(failed_a_stocks)}")
     
     # Process HK data
     if len(hk_stock_list) > 0:
         print("\nProcessing HK data...")
-        all_stock_data, failed_hk_stocks = _process_hk_stock_list(
-            hk_stock_list, all_stock_data
+        success_count, failed_hk_stocks = _process_hk_stock_list(
+            hk_stock_list, output_folder
         )
-        print(f"港股处理完成，成功: {len(hk_stock_list) - len(failed_hk_stocks)}, "
+        total_hk_success += success_count
+        print(f"港股处理完成，成功: {success_count}, "
               f"失败: {len(failed_hk_stocks)}")
     
     # Retry failed stocks
@@ -384,11 +361,11 @@ def get_innovative_drug_stocks_data(a_stock_csv_path: str,
         if len(failed_a_stocks) > 0:
             print(f"重试 A股数据 ({len(failed_a_stocks)} 只)...")
             failed_a_df = pd.DataFrame(failed_a_stocks)
-            temp_data, new_failed_a_stocks = _process_a_stock_list(
-                failed_a_df, all_stock_data
+            success_count, new_failed_a_stocks = _process_a_stock_list(
+                failed_a_df, output_folder
             )
-            all_stock_data = temp_data
-            print(f"A股重试完成，成功: {len(failed_a_stocks) - len(new_failed_a_stocks)}, "
+            total_a_success += success_count
+            print(f"A股重试完成，成功: {success_count}, "
                   f"仍失败: {len(new_failed_a_stocks)}")
         
         # Retry failed HK stocks
@@ -396,11 +373,11 @@ def get_innovative_drug_stocks_data(a_stock_csv_path: str,
         if len(failed_hk_stocks) > 0:
             print(f"\n重试 港股数据 ({len(failed_hk_stocks)} 只)...")
             failed_hk_df = pd.DataFrame(failed_hk_stocks)
-            temp_data, new_failed_hk_stocks = _process_hk_stock_list(
-                failed_hk_df, all_stock_data
+            success_count, new_failed_hk_stocks = _process_hk_stock_list(
+                failed_hk_df, output_folder
             )
-            all_stock_data = temp_data
-            print(f"港股重试完成，成功: {len(failed_hk_stocks) - len(new_failed_hk_stocks)}, "
+            total_hk_success += success_count
+            print(f"港股重试完成，成功: {success_count}, "
                   f"仍失败: {len(new_failed_hk_stocks)}")
         
         # Update failed lists
@@ -408,23 +385,20 @@ def get_innovative_drug_stocks_data(a_stock_csv_path: str,
         failed_hk_stocks = new_failed_hk_stocks
     
     # Final summary
+    total_success = total_a_success + total_hk_success
+    total_failed = len(failed_a_stocks) + len(failed_hk_stocks)
+    
     print(f"\n{'='*60}")
     print("数据获取完成")
     print(f"{'='*60}")
-    print(f"总记录数: {len(all_stock_data)}")
-    successful_stocks = 0
-    if len(all_stock_data) > 0:
-        successful_stocks = all_stock_data['Code'].nunique()
-        print(f"成功获取股票数: {successful_stocks}")
+    print(f"输出文件夹: {output_folder}")
+    print(f"成功获取股票数: {total_success}")
+    print(f"  - A股成功: {total_a_success}")
+    print(f"  - 港股成功: {total_hk_success}")
+    print(f"失败股票数: {total_failed}")
+    print(f"  - A股失败: {len(failed_a_stocks)}")
+    print(f"  - 港股失败: {len(failed_hk_stocks)}")
     print(f"总轮数: {round_num}")
-    
-    # Calculate total stocks count
-    total_stocks = len(a_stock_list) + len(hk_stock_list)
-    
-    # Write log file
-    completion_time = datetime.datetime.now()
-    _write_log_file(completion_time, failed_a_stocks, failed_hk_stocks, 
-                   total_stocks, successful_stocks)
     
     if len(failed_a_stocks) > 0 or len(failed_hk_stocks) > 0:
         print(f"\n警告: 仍有部分股票未能成功获取:")
@@ -437,26 +411,38 @@ def get_innovative_drug_stocks_data(a_stock_csv_path: str,
             for stock in failed_hk_stocks:
                 print(f"    - {stock['代码']}: {stock['名称']}")
     
-    return all_stock_data
+    return {
+        'total_success': total_success,
+        'total_failed': total_failed,
+        'a_success': total_a_success,
+        'a_failed': len(failed_a_stocks),
+        'hk_success': total_hk_success,
+        'hk_failed': len(failed_hk_stocks),
+        'output_folder': output_folder
+    }
 
 
 def main():
     """Main function."""
     a_stock_csv = ('Ashare_innovative_drug_stocks_code.csv')
     hk_stock_csv = ('Hshare_innovative_drug_stocks_code.csv')
+    output_folder = 'stock_data'  # 指定输出文件夹
 
     try:
-        stock_data = get_innovative_drug_stocks_data(a_stock_csv, hk_stock_csv)
+        stats = get_innovative_drug_stocks_data(
+            a_stock_csv, 
+            hk_stock_csv,
+            output_folder=output_folder
+        )
         
-        print("\nData overview:")
-        print(stock_data.head())
-        print(f"\nData shape: {stock_data.shape}")
-        print("Data type distribution:")
-        print(stock_data['Type'].value_counts())
-        
-        output_file = 'innovative_drug_stocks_data.csv'
-        stock_data.to_csv(output_file, index=False, encoding='utf-8')
-        print(f"\nData saved to: {output_file}")
+        print("\n" + "="*60)
+        print("执行完成统计:")
+        print("="*60)
+        print(f"输出文件夹: {stats['output_folder']}")
+        print(f"总成功数: {stats['total_success']}")
+        print(f"总失败数: {stats['total_failed']}")
+        print(f"A股成功: {stats['a_success']}, 失败: {stats['a_failed']}")
+        print(f"港股成功: {stats['hk_success']}, 失败: {stats['hk_failed']}")
         
     except Exception as e:
         print(f"Execution error: {e}")
