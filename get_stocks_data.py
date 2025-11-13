@@ -270,7 +270,7 @@ def get_innovative_drug_stocks_data(a_stock_csv_path: str,
     # Load initial stock lists
     try:
         print("Loading stock lists...")
-        a_stock_list = pd.read_csv(a_stock_csv_path, encoding='utf-16', sep='\t')
+        a_stock_list = pd.read_csv(a_stock_csv_path, encoding='utf-8')
         print(f"A-share list contains {len(a_stock_list)} stocks")
     except FileNotFoundError:
         print(f"Error: A-share CSV file not found {a_stock_csv_path}")
@@ -280,7 +280,7 @@ def get_innovative_drug_stocks_data(a_stock_csv_path: str,
         raise ValueError(f"A-share CSV loading failed: {e}")
     
     try:
-        hk_stock_list = pd.read_csv(hk_stock_csv_path, encoding='utf-16', sep='\t')
+        hk_stock_list = pd.read_csv(hk_stock_csv_path, encoding='utf-8')
         print(f"HK list contains {len(hk_stock_list)} stocks")
     except FileNotFoundError:
         print(f"Error: HK CSV file not found {hk_stock_csv_path}")
