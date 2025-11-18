@@ -5,6 +5,8 @@ Module for fetching innovative drug concept stocks data from A-share.
 import datetime
 import time
 import random
+import json
+import numpy as np
 import pandas as pd
 import akshare as ak
 from typing import Optional
@@ -165,7 +167,7 @@ def _write_log_file(completion_time: datetime.datetime,
     print(f"\n日志已追加到文件: {log_filename}")
 
 
-def get_innovative_drug_stocks_data(a_stock_csv_path: str, 
+def get_innovative_drug_stocks_data(a_stock_json_path: str, 
                                   max_retry_rounds: int = 5,
                                   retry_delay_minutes: int = 45) -> pd.DataFrame:
     """
@@ -173,7 +175,7 @@ def get_innovative_drug_stocks_data(a_stock_csv_path: str,
     Automatically retries failed stocks after waiting period.
     
     Args:
-        a_stock_csv_path: Path to A-share stock list CSV
+        a_stock_json_path: Path to A-share stock list JSON
         max_retry_rounds: Maximum number of retry rounds (default: 5)
         retry_delay_minutes: Minutes to wait before retry (default: 30)
         
@@ -181,8 +183,8 @@ def get_innovative_drug_stocks_data(a_stock_csv_path: str,
         Combined DataFrame with A-share
         
     Raises:
-        FileNotFoundError: When CSV files not found
-        ValueError: When CSV format is invalid
+        FileNotFoundError: When JSON files not found
+        ValueError: When JSON format is invalid
     """
     _setup_pandas_options()
     
@@ -191,14 +193,19 @@ def get_innovative_drug_stocks_data(a_stock_csv_path: str,
     # Load initial stock lists
     try:
         print("Loading stock lists...")
-        a_stock_list = pd.read_csv(a_stock_csv_path, encoding='utf-8')
+        with open(a_stock_json_path, 'r', encoding='utf-8') as f:
+            a_stock_data = json.load(f)
+        a_stock_list = pd.DataFrame(a_stock_data)
         print(f"A-share list contains {len(a_stock_list)} stocks")
     except FileNotFoundError:
-        print(f"Error: A-share CSV file not found {a_stock_csv_path}")
+        print(f"Error: A-share JSON file not found {a_stock_json_path}")
         raise
+    except json.JSONDecodeError as e:
+        print(f"Error parsing A-share JSON: {e}")
+        raise ValueError(f"A-share JSON parsing failed: {e}")
     except Exception as e:
-        print(f"Error loading A-share CSV: {e}")
-        raise ValueError(f"A-share CSV loading failed: {e}")
+        print(f"Error loading A-share JSON: {e}")
+        raise ValueError(f"A-share JSON loading failed: {e}")
     
     # Track failed stocks for retry
     failed_a_stocks = []
@@ -297,10 +304,10 @@ def get_innovative_drug_stocks_data(a_stock_csv_path: str,
 
 def main():
     """Main function."""
-    a_stock_csv = ('Ashare_innovative_drug_stocks_code.csv')
+    a_stock_json = ('Ashare_innovative_drug_stocks_code.json')
 
     try:
-        stock_data = get_innovative_drug_stocks_data(a_stock_csv)
+        stock_data = get_innovative_drug_stocks_data(a_stock_json)
         
         print("\nData overview:")
         print(stock_data.head())
@@ -308,8 +315,28 @@ def main():
         print("Data type distribution:")
         print(stock_data['Type'].value_counts())
         
-        output_file = 'innovative_drug_stocks_data.csv'
-        stock_data.to_csv(output_file, index=False, encoding='utf-8')
+        output_file = 'innovative_drug_stocks_data.json'
+        # Convert DataFrame to JSON format
+        # Convert date columns to string format for JSON serialization
+        stock_data_copy = stock_data.copy()
+        # Convert Date column to string if it exists
+        if 'Date' in stock_data_copy.columns:
+            stock_data_copy['Date'] = stock_data_copy['Date'].astype(str)
+        # Convert DataFrame to dict, handling NaN values and numpy types
+        stock_data_json = stock_data_copy.to_dict(orient='records')
+        # Replace NaN/NaT values and convert numpy types for JSON serialization
+        for record in stock_data_json:
+            for key, value in record.items():
+                if pd.isna(value):
+                    record[key] = None
+                elif isinstance(value, (pd.Timestamp, datetime.date)):
+                    record[key] = str(value)
+                elif isinstance(value, (np.integer, np.floating)):
+                    record[key] = value.item()
+                elif isinstance(value, np.ndarray):
+                    record[key] = value.tolist()
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump(stock_data_json, f, ensure_ascii=False, indent=2)
         print(f"\nData saved to: {output_file}")
         
     except Exception as e:
