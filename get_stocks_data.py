@@ -40,9 +40,8 @@ def _get_a_stock_data(symbol: str, name: str) -> Optional[pd.DataFrame]:
             one_year_ago = (datetime.date.today() - 
                            datetime.timedelta(days=365)).strftime('%Y%m%d')
             
-            stock_data = ak.stock_zh_a_hist(
+            stock_data = ak.stock_zh_a_hist_tx(
                 symbol=symbol,
-                period="daily",
                 start_date=one_year_ago,
                 end_date=today,
                 adjust="qfq"
@@ -51,24 +50,10 @@ def _get_a_stock_data(symbol: str, name: str) -> Optional[pd.DataFrame]:
             if stock_data.empty:
                 print(f"Warning: {symbol} returned empty data")
                 return None
-                
-            stock_data = stock_data[['日期', '股票代码', '开盘', '收盘', 
-                                   '最高', '最低', '成交量', '成交额']]
-            stock_data.rename(
-                columns={
-                    '日期': 'Date',
-                    '股票代码': 'Code',
-                    '开盘': 'Open',
-                    '收盘': 'Close',
-                    '最高': 'High',
-                    '最低': 'Low',
-                    '成交量': 'Volume',
-                    '成交额': 'Trading_Volume'
-                },
-                inplace=True
-            )
-            stock_data['Name'] = name
-            stock_data['Type'] = 'A'
+
+            stock_data['name'] = name
+            stock_data['code'] = symbol
+            stock_data['type'] = 'A'
             
             return stock_data
             
@@ -280,7 +265,7 @@ def get_innovative_drug_stocks_data(a_stock_json_path: str,
     print(f"总记录数: {len(all_stock_data)}")
     successful_stocks = 0
     if len(all_stock_data) > 0:
-        successful_stocks = all_stock_data['Code'].nunique()
+        successful_stocks = all_stock_data['code'].nunique()
         print(f"成功获取股票数: {successful_stocks}")
     print(f"总轮数: {round_num}")
     
@@ -313,7 +298,7 @@ def main():
         print(stock_data.head())
         print(f"\nData shape: {stock_data.shape}")
         print("Data type distribution:")
-        print(stock_data['Type'].value_counts())
+        print(stock_data['type'].value_counts())
         
         output_file = 'innovative_drug_stocks_data.json'
         # Convert DataFrame to JSON format
